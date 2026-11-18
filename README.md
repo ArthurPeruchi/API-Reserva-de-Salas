@@ -27,11 +27,13 @@ pip install -r requirements.txt
 copy .env.example .env        # Linux/macOS: cp .env.example .env
 # Depois edite o arquivo .env, preenchendo DATABASE_URL, ADMIN_EMAIL e ADMIN_PASSWORD
 
-# 5. Subir a API
+# 5. Aplicar as migrations e cadastrar os dados de desenvolvimento
+python -m alembic upgrade head
+python -m app.seed
+
+# 6. Subir a API
 uvicorn app.main:app --reload
 ```
-
-> Após configurar o .env, execute python -m alembic upgrade head. As instruções do seed serão acrescentadas pelo Membro 3.
 
 Para confirmar que a API subiu, acesse http://127.0.0.1:8000/api/health: a resposta deve ser `{"status": "ok"}`.
 
@@ -60,12 +62,13 @@ O projeto é organizado em camadas. O fluxo de uma requisição segue sempre no 
 app/
   main.py              # cria o app e registra controllers e handlers de erro
   seed.py              # popula o banco (admin e salas de exemplo)
+  core/                # hash e verificação de senhas com bcrypt
   controllers/         # rotas HTTP: recebem a requisição e devolvem a resposta
   usecases/            # regras de negócio (uma função por ação do sistema)
   repositories/        # acesso ao banco (consultas com SQLAlchemy)
   models/              # tabelas do banco (SQLAlchemy)
   schemas/             # modelos Pydantic de entrada e saída
-  infrastructure/      # detalhes técnicos: config, banco, bcrypt e JWT
+  infrastructure/      # detalhes técnicos: config e banco
 alembic/               # migrations
 tests/                 # testes automatizados
 ```
@@ -125,12 +128,37 @@ python -m alembic upgrade head
 
 render_as_batch=True está configurado nos modos online e offline para alterações de tabelas SQLite.
 
-A migration inicial foi escrita manualmente. Nesta entrega, a sintaxe Python foi conferida. A execução de Alembic e pytest ficou pendente porque a instalação das dependências não foi concluída no ambiente de verificação.
+A migration inicial foi escrita manualmente. Na validação do seed, o ciclo de migrations e a suíte de testes também foram executados com sucesso.
 
 
 ## **Seed (dados iniciais)**
 
-> TODO (Membro 3): como rodar `python -m app.seed` e as credenciais do admin de desenvolvimento.
+Copie `.env.example` para `.env` e execute na raiz do projeto, após aplicar as migrations:
+
+```powershell
+python -m app.seed
+```
+
+Credenciais de desenvolvimento fornecidas no `.env.example` (use apenas localmente):
+
+| Variável | Valor |
+| --- | --- |
+| ADMIN_EMAIL | admin@dominio.com |
+| ADMIN_PASSWORD | AdminDev123! |
+
+O seed lê `ADMIN_EMAIL`, `ADMIN_PASSWORD` e `DATABASE_URL` do `.env`; variáveis do ambiente têm precedência. As credenciais são obrigatórias. O administrador é criado com nome `Administrador` e papel `admin`. A senha é gravada somente como hash bcrypt em `users.password_hash`, usando `app/core/security.py`, sem passlib. Senhas novas devem ter de 1 a 72 bytes em UTF-8; senhas maiores são rejeitadas sem truncamento. Consulte a [documentação do bcrypt](https://github.com/pyca/bcrypt).
+
+São cadastradas quatro salas: Sala 101 (30 lugares), Sala 102 (40), Laboratório de Informática (25) e Sala de Reuniões (10), cada uma com sua localização.
+
+Antes de inserir, o seed consulta o usuário pelo e-mail e cada sala pelo nome. Registros existentes são preservados, incluindo senha, papel, capacidade e localização. Alterar a senha no `.env` não troca a senha de um usuário já cadastrado. Todas as inserções são realizadas em uma única transação.
+
+Em um banco vazio, a primeira execução informa `1 administrador(es) e 4 sala(s) criados`. A segunda informa `0 administrador(es) e 0 sala(s) criados`. Se faltar uma sala, somente ela será inserida novamente.
+
+```powershell
+python -m pytest tests/test_security.py tests/test_seed.py
+```
+
+Os testes executam migrations e `python -m app.seed` duas vezes em um banco temporário, consultam o hash salvo e verificam a senha com bcrypt, além de conferir a ausência de duplicatas e a preservação de dados existentes. O `.env` e o banco local são ignorados pelo Git. Os testes adicionais do CRUD de salas ficam para quando suas rotas estiverem disponíveis.
 
 ## **Fluxo de trabalho no Git**
 
