@@ -31,7 +31,7 @@ copy .env.example .env        # Linux/macOS: cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-> As etapas de migrations e de seed serão acrescentadas aqui pelos Membros 2 e 3, entre as etapas 4 e 5.
+> Após configurar o .env, execute python -m alembic upgrade head. As instruções do seed serão acrescentadas pelo Membro 3.
 
 Para confirmar que a API subiu, acesse http://127.0.0.1:8000/api/health: a resposta deve ser `{"status": "ok"}`.
 
@@ -74,9 +74,59 @@ tests/                 # testes automatizados
 
 > TODO (Membro 5): documentar o formato de sucesso, paginação e erros (400, 404, 422).
 
-## **Banco de dados e migrations**
+## Banco de dados e migrations
 
-> TODO (Membro 2): como aplicar as migrations (`alembic upgrade head`) e diagrama das tabelas.
+O banco usa SQLAlchemy 2 e três tabelas.
+
+| Tabela | Campos |
+| --- | --- |
+| users | id, name, email único, password_hash, role |
+| rooms | id, name, capacity, location |
+| reservations | id, room_id, user_id, start, end, reason |
+
+Cada reserva pertence a um usuário e uma sala. User.reservations e Room.reservations permitem consultar as reservas relacionadas. O seed deve gravar o hash bcrypt em password_hash. O papel aceita user e admin, com user como padrão.
+
+Depois de configurar o .env, aplique a migration antes de subir a API.
+
+```powershell
+python -m alembic upgrade head
+python -m alembic current
+```
+
+A configuração usa get_settings().database_url e ativa PRAGMA foreign_keys=ON em cada conexão SQLite. Engines criados por create_database_engine também recebem essa configuração. Para bancos em memória, StaticPool compartilha a conexão entre as sessões e threads dos testes.
+
+As chaves estrangeiras usam ON DELETE RESTRICT. A exclusão de sala ou usuário com reservas é bloqueada pelo banco. As relationships usam passive_deletes="all" para preservar esse comportamento mesmo com reservas carregadas na sessão.
+
+Na integração do CRUD, o responsável pelo serviço de salas deve responder 409 com a mensagem "A sala possui reservas." quando a exclusão estiver bloqueada. Se o commit lançar IntegrityError, execute session.rollback() antes de reutilizar a sessão. O banco garante a integridade também quando uma reserva é criada durante a tentativa de exclusão.
+
+Para conferir upgrade e downgrade em um banco novo, use um nome de arquivo que ainda não exista.
+
+```powershell
+$env:DATABASE_URL = "sqlite:///./verificacao_membro2.db"
+python -m alembic upgrade head
+python -m alembic check
+python -m alembic downgrade base
+python -m alembic upgrade head
+Remove-Item Env:DATABASE_URL
+```
+
+downgrade base remove as tabelas e todos os seus dados. Os testes de tests/test_database.py usam um banco temporário para verificar o ciclo das migrations, e-mail único, chaves estrangeiras e bloqueio de exclusão com a coleção carregada e descarregada.
+
+```powershell
+python -m pytest
+```
+
+Para alterações futuras, gere uma migration e revise o conteúdo antes de aplicar.
+
+```powershell
+python -m alembic revision --autogenerate -m "descricao"
+python -m alembic upgrade head
+```
+
+render_as_batch=True está configurado nos modos online e offline para alterações de tabelas SQLite.
+
+A migration inicial foi escrita manualmente. Nesta entrega, a sintaxe Python foi conferida. A execução de Alembic e pytest ficou pendente porque a instalação das dependências não foi concluída no ambiente de verificação.
+
 
 ## **Seed (dados iniciais)**
 
