@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
-from app.controllers.error_handlers import register_error_handlers
 
 from app.controllers import room_controller
 from app.controllers.error_handlers import register_error_handlers
