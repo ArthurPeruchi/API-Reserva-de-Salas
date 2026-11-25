@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Response, status
 
-from app.controllers.dependencies import DbSession, require_admin
+from app.controllers.dependencies import DbSession, get_pagination, require_admin
+from app.schemas.common import Page, PaginationParams
 from app.schemas.room import RoomIn, RoomOut
 from app.usecases import room_usecases
 
@@ -9,9 +10,13 @@ router = APIRouter(prefix="/api/rooms", tags=["Salas"])
 ADMIN_ONLY = [Depends(require_admin)]
 
 
-@router.get("", response_model=list[RoomOut])
-def list_rooms(session: DbSession):
-    return room_usecases.list_rooms(session)
+@router.get("", response_model=Page[RoomOut])
+def list_rooms(
+    session: DbSession,
+    pagination: PaginationParams = Depends(get_pagination),
+):
+    items, total = room_usecases.list_rooms(session, pagination)
+    return Page(data=items, page=pagination.page, size=pagination.size, total=total)
 
 
 @router.get("/{room_id}", response_model=RoomOut)

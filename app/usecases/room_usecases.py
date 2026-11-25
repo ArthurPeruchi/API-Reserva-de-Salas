@@ -1,16 +1,19 @@
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.exceptions import ConflictError, NotFoundError
 from app.models import Room
 from app.repositories import room_repository
+from app.schemas.common import PaginationParams
 from app.schemas.room import RoomIn
 
 DUPLICATE_NAME = "Já existe uma sala com esse nome."
 
 
-def list_rooms(session: Session) -> list[Room]:
-    return room_repository.list_rooms(session)
+def list_rooms(
+    session: Session, pagination: PaginationParams
+) -> tuple[list[Room], int]:
+    return room_repository.list_rooms(session, pagination.offset, pagination.size)
 
 
 def get_room(session: Session, room_id: int) -> Room:
@@ -45,7 +48,7 @@ def update_room(session: Session, room_id: int, data: RoomIn) -> Room:
 def delete_room(session: Session, room_id: int) -> None:
     room = get_room(session, room_id)
     session.delete(room)
-    _commit(session, "A sala possui reservas vinculadas e não pode ser excluída.")
+    _commit(session, "A sala possui reservas.")
 
 
 def _commit(session: Session, conflict_message: str) -> None:

@@ -1,12 +1,21 @@
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.infrastructure.database import get_db
 from app.models import User
+from app.schemas.common import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PaginationParams
 
 DbSession = Annotated[Session, Depends(get_db)]
+
+
+def get_pagination(
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
+) -> PaginationParams:
+    """Lê e valida page e size da query string."""
+    return PaginationParams(page=page, size=size)
 
 
 def require_admin(
