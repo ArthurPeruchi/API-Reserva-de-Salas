@@ -73,6 +73,22 @@ alembic/               # migrations
 tests/                 # testes automatizados
 ```
 
+## **Salas (CRUD)**
+
+| Método | Rota | Acesso | Sucesso |
+| --- | --- | --- | --- |
+| GET | /api/rooms | público | 200 com a lista de salas |
+| GET | /api/rooms/{id} | público | 200 com a sala |
+| POST | /api/rooms | admin | 201 com a sala criada |
+| PUT | /api/rooms/{id} | admin | 200 com a sala atualizada |
+| DELETE | /api/rooms/{id} | admin | 204 sem corpo |
+
+Corpo do POST e do PUT: `{"name": "Sala 101", "capacity": 30, "location": "Bloco A"}`. O PUT exige todos os campos.
+
+Erros: 404 se a sala não existe, 409 se o nome já está em uso ou se a sala tem reservas, 422 se o payload é inválido.
+
+**Autenticação provisória (Sprint 2):** as rotas de admin leem o cabeçalho `X-User-Id` com o ID de um usuário `admin`. Depois de rodar o seed, use `X-User-Id: 1`. Sem o cabeçalho, ou com um ID inexistente, a resposta é 401. Com um usuário comum, é 403. Na Sprint 3 isso será trocado por JWT em `app/controllers/dependencies.py` (`require_admin`).
+
 ## **Padrão de respostas e erros**
 
 > TODO (Membro 5): documentar o formato de sucesso, paginação e erros (400, 404, 422).
