@@ -13,7 +13,7 @@ class Room(Base):
     __tablename__ = "rooms"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(150))
+    name: Mapped[str] = mapped_column(String(150), unique=True, index=True)
     capacity: Mapped[int]
     location: Mapped[str] = mapped_column(String(255))
 

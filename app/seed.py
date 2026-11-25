@@ -1,6 +1,7 @@
 """Execute com python -m app.seed após aplicar as migrations."""
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
@@ -45,8 +46,20 @@ def seed_database(session: Session, settings: Settings) -> tuple[int, int]:
 
 
 def main() -> None:
-    with SessionLocal.begin() as session:
-        users_created, rooms_created = seed_database(session, get_settings())
+    settings = get_settings()
+    # Uma nova consulta após o rollback enxerga os registros inseridos por outra
+    # execução. Há no máximo um admin e len(ROOMS) salas disputados pelo seed.
+    max_attempts = len(ROOMS) + 2
+    with SessionLocal() as session:
+        for attempt in range(max_attempts):
+            try:
+                users_created, rooms_created = seed_database(session, settings)
+                session.commit()
+                break
+            except IntegrityError:
+                session.rollback()
+                if attempt == max_attempts - 1:
+                    raise
     print(f"Seed concluído: {users_created} administrador(es) e {rooms_created} sala(s) criados.")
 
 

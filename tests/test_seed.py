@@ -5,8 +5,10 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, sessionmaker
 
+from app import seed
 from app.core.security import hash_password, verify_password
 from app.infrastructure.config import Settings
 from app.infrastructure.database import Base, create_database_engine
@@ -58,6 +60,75 @@ def test_seed_requires_credentials_before_writing(seed_engine, settings, field):
         with pytest.raises(ValueError, match="ADMIN_EMAIL e ADMIN_PASSWORD"):
             seed_database(session, settings)
         assert session.scalars(select(User)).all() == []
+        assert session.scalars(select(Room)).all() == []
+
+
+@pytest.mark.parametrize("conflicting_model,expected_counts", [
+    (Room, "1 administrador(es) e 3 sala(s)"),
+    (User, "0 administrador(es) e 4 sala(s)"),
+])
+def test_seed_recovers_from_duplicate_insert(
+    seed_engine, settings, monkeypatch, capsys, conflicting_model, expected_counts,
+):
+    with Session(seed_engine) as session, session.begin():
+        if conflicting_model is Room:
+            session.add(Room(name=ROOMS[0]["name"], capacity=99, location="Existente"))
+        else:
+            session.add(User(name="Existente", email=settings.admin_email,
+                             password_hash="hash-preservado", role="admin"))
+
+    original_scalar = Session.scalar
+    stale_read = False
+
+    def scalar_with_stale_read(session, statement, *args, **kwargs):
+        nonlocal stale_read
+        if not stale_read and statement.column_descriptions[0]["entity"] is conflicting_model:
+            # Simula a consulta que não viu a inserção concorrente. O INSERT
+            # seguinte deve provocar um IntegrityError real no banco.
+            stale_read = True
+            return None
+        return original_scalar(session, statement, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "scalar", scalar_with_stale_read)
+    monkeypatch.setattr(seed, "SessionLocal", sessionmaker(bind=seed_engine))
+    monkeypatch.setattr(seed, "get_settings", lambda: settings)
+    seed.main()
+    assert stale_read
+    assert expected_counts in capsys.readouterr().out
+    with Session(seed_engine) as session:
+        users = session.scalars(select(User)).all()
+        rooms = session.scalars(select(Room)).all()
+        assert len(users) == 1
+        assert len(rooms) == 4
+        assert {room.name for room in rooms} == {room["name"] for room in ROOMS}
+        if conflicting_model is Room:
+            existing = next(room for room in rooms if room.name == ROOMS[0]["name"])
+            assert (existing.capacity, existing.location) == (99, "Existente")
+        else:
+            assert users[0].password_hash == "hash-preservado"
+
+
+def test_seed_persistent_integrity_error_rolls_back_and_is_reported(
+    seed_engine, settings, monkeypatch, capsys,
+):
+    attempts = 0
+
+    def invalid_seed(session, settings):
+        nonlocal attempts
+        attempts += 1
+        session.add(Room(name="Válida", capacity=20, location="Bloco A"))
+        session.flush()
+        session.add(Room(name="Inválida", capacity=None, location="Bloco A"))
+        session.flush()
+
+    monkeypatch.setattr(seed, "seed_database", invalid_seed)
+    monkeypatch.setattr(seed, "SessionLocal", sessionmaker(bind=seed_engine))
+    monkeypatch.setattr(seed, "get_settings", lambda: settings)
+    with pytest.raises(IntegrityError):
+        seed.main()
+    assert attempts == len(ROOMS) + 2
+    assert "Seed concluído" not in capsys.readouterr().out
+    with Session(seed_engine) as session:
         assert session.scalars(select(Room)).all() == []
 
 
