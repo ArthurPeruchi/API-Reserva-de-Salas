@@ -152,6 +152,8 @@ São cadastradas quatro salas: Sala 101 (30 lugares), Sala 102 (40), Laboratóri
 
 Antes de inserir, o seed consulta o usuário pelo e-mail e cada sala pelo nome. Registros existentes são preservados, incluindo senha, papel, capacidade e localização. Alterar a senha no `.env` não troca a senha de um usuário já cadastrado. Todas as inserções são realizadas em uma única transação.
 
+A migration `0002` adiciona um índice `UNIQUE` em `rooms.name`, impedindo nomes repetidos também em inserções feitas fora do seed. Se já houver nomes duplicados, eles precisam ser corrigidos antes de aplicar a migration; nenhum registro é excluído automaticamente. Em caso de `IntegrityError`, o comando do seed faz rollback e repete as consultas e inserções, preservando os registros gravados por outra execução. As tentativas são limitadas a seis; erros persistentes são propagados sem confirmar dados parciais.
+
 Em um banco vazio, a primeira execução informa `1 administrador(es) e 4 sala(s) criados`. A segunda informa `0 administrador(es) e 0 sala(s) criados`. Se faltar uma sala, somente ela será inserida novamente.
 
 ```powershell
