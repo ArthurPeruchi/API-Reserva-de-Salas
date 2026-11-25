@@ -75,7 +75,78 @@ tests/                 # testes automatizados
 
 ## **Padrão de respostas e erros**
 
-> TODO (Membro 5): documentar o formato de sucesso, paginação e erros (400, 404, 422).
+### **Formato de sucesso:**
+
+Padrão adotado para as rotas de CRUD:
+
+| Operação | Status | Corpo |
+| --- | --- | --- |
+| Listar | 200 | Envelope paginado (veja Paginação) |
+| Buscar por id | 200 | O recurso |
+| Criar | 201 | O recurso criado |
+| Atualizar (`PUT`) | 200 | O recurso atualizado, com todos os campos substituídos |
+| Excluir | 204 | Sem corpo |
+
+### **Formato de erro:**
+
+Toda resposta de erro segue o mesmo corpo JSON:
+
+```json
+{
+  "status": 404,
+  "message": "Sala não encontrada."
+}
+```
+
+Erros de validação (422) incluem também a lista `errors`, com o campo e o motivo de cada problema:
+
+```json
+{
+  "status": 422,
+  "message": "Dados inválidos.",
+  "errors": [
+    { "field": "name", "message": "Deve ter no mínimo 1 caractere(s)." },
+    { "field": "capacity", "message": "Deve ser maior que 0." }
+  ]
+}
+```
+
+### **Códigos de status:**
+
+| Código | Quando acontece |
+| --- | --- |
+| 400 | JSON malformado no corpo da requisição |
+| 401 | Não autenticado ou token inválido (a partir da autenticação) |
+| 403 | Autenticado, mas sem permissão para a ação (a partir da autenticação) |
+| 404 | Recurso ou rota inexistente |
+| 405 | Método HTTP não permitido na rota |
+| 409 | Conflito com o estado atual dos dados, como excluir uma sala que possui reservas |
+| 422 | Dados inválidos (campo ausente, tipo errado, valor fora do limite) |
+| 500 | Erro interno; o detalhe fica no log e não é enviado ao cliente |
+
+### **Paginação:**
+
+As listagens aceitam os parâmetros de query abaixo:
+
+| Parâmetro | Regra | Padrão |
+| --- | --- | --- |
+| `page` | inteiro, mínimo 1 | 1 |
+| `size` | inteiro de 1 a 100 | 10 |
+
+Exemplo: `GET /api/rooms?page=2&size=5`
+
+A resposta traz os itens em `data` e o total de registros no banco em `total`:
+
+```json
+{
+  "data": [],
+  "page": 2,
+  "size": 5,
+  "total": 3
+}
+```
+
+Uma página além da última devolve `data` vazio com status 200. Valores inválidos, como `page=0` ou `size=101`, devolvem 422.
 
 ## Banco de dados e migrations
 
